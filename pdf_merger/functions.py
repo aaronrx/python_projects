@@ -7,220 +7,207 @@ from zipfile import ZipFile
 
 def create_directories():
     """Create required directories if they don't exist"""
-    # try:
-    directories = ('Actual_Results', 'Expected_Results', 'output', 'archive')
+    # Create tmp dir for the merging process.
+    tmp_directory = os.path.join(os.getcwd(), "tmp{}".format(os.getpid()))
+    directories = ("Actual_Results", "Expected_Results", "output", "archive", tmp_directory)
     dir_paths = [os.path.join(os.getcwd(), directory) for directory in directories]
 
     try:
         for dir_path in dir_paths:
             if os.path.exists(dir_path) and os.path.isfile(dir_path):
                 # Raise exception if a file exists in the supposed path of the directory.
-                raise FileExistsError('Unable to create required directory. File exists in "{}".'.format(dir_path))
+                raise FileExistsError("Unable to create required directory. File exists in '{}'.".format(dir_path))
             elif not os.path.exists(dir_path):
                 os.mkdir(dir_path)
-
     except FileExistsError as e:
         abort_program(e)
 
 
-def get_pdf_list(directory):
+def get_complete_pdf_list(directory):
     """List and sort all available letters in Actual and Expected directories
        and then return the details as a dictionary.
     """
 
     # List all pdf files inside path
-    pdfFiles = glob.glob("./{}/*.pdf".format(directory))
+    pdf_files = glob.glob("./{}/*.pdf".format(directory))
 
     # Regex patterns...
-    refnoPattern = "[A-Z0-9]{1,2}[0-9]{5}"
-    letterIDPattern = "{}.(.*?)_{}".format(directory, refnoPattern)
+    refno_pattern = "[A-Z0-9]{1,2}[0-9]{5}"
+    letter_id_pattern = "{}.(.*?)_{}".format(directory, refno_pattern)
 
     # Extract letterIDs from pdfFiles list
-    letterIDList = set(re.findall(letterIDPattern, "".join(pdfFiles)))
+    letter_id_list = set(re.findall(letter_id_pattern, "".join(pdf_files)))
 
-    return {letterID: [os.path.join(os.getcwd(), path)
-                       for path in glob.glob("{}/*{}*.pdf".format(directory, letterID))] for letterID in letterIDList}
+    # TODO: Find a better alternative for glob.
+    return {letter_id: [os.path.join(os.getcwd(), path)
+                        for path in glob.glob("{}/*{}*.pdf".format(directory, letter_id))] for letter_id in letter_id_list}
+
+
+def get_filtered_list(refno_pattern, common_refno_list, raw_file_list, missing_files):
+    """Filters out files whose refno does not exist in either Actual or Expected and returns a sorted fileList"""
+    file_list = []
+
+    # Sort raw_file_list before the loop
+    for file in sorted(raw_file_list):
+        # search for refno from the file path
+        match = re.search(refno_pattern, file)
+        if match and match.group() in common_refno_list:
+            file_list.append(os.path.join(os.getcwd(), file))
+        else:
+            # Append the missing file to the missingFiles list
+            source = Path(file).parts[-2]
+            if "actual" in source.lower():
+                missing_files.append(os.path.join(os.getcwd(), "Expected_Results", file))
+            else:
+                missing_files.append(os.path.join(os.getcwd(), "Actual_Results", file))
+
+    return file_list
 
 
 def get_master_list():
     """Get the common pdf files from the Actual and Expected file list."""
-    actualResultsPDFList = get_pdf_list("Actual_Results")
-    expectedResultsPDFList = get_pdf_list("Expected_Results")
-    missingFiles = []
+    actual_results_pdf_list = get_complete_pdf_list("Actual_Results")
+    expected_results_pdf_list = get_complete_pdf_list("Expected_Results")
+    missing_files = []
 
-    masterList = {
-        'Actual': dict(),
-        'Expected': dict()
+    master_list = {
+        "Actual": dict(),
+        "Expected": dict()
     }
 
-    if actualResultsPDFList and expectedResultsPDFList:
+    if actual_results_pdf_list and expected_results_pdf_list:
         # Get common letterIDs
-        letterIDs = set(actualResultsPDFList.keys()) & set(expectedResultsPDFList.keys())
+        letter_ids = set(actual_results_pdf_list.keys()) & set(expected_results_pdf_list.keys())
 
-        # Append files to missingFiles if their LetterIDs does not exist in both directories
-        missingLetterIDs = [filename + "*.pdf"
-                            for filename in set(actualResultsPDFList.keys()) ^ set(expectedResultsPDFList.keys())]
-        missingFiles.extend(missingLetterIDs)
+        # Append files to missingFiles if their LetterIDs do not exist in both directories
+        [missing_files.append(filename + "*.pdf")
+         for filename in set(actual_results_pdf_list.keys()) ^ set(expected_results_pdf_list.keys())]
 
-        refnoPattern = re.compile("[A-Z0-9]{1,2}[0-9]{5}")
+        refno_pattern = re.compile("[A-Z0-9]{1,2}[0-9]{5}")
 
         # Loop through the letterIDs
-        for letterID in letterIDs:
-            actualFilesList = actualResultsPDFList[letterID]
-            expectedFilesList = expectedResultsPDFList[letterID]
+        for letter_id in letter_ids:
+            actual_file_list = actual_results_pdf_list[letter_id]
+            expected_file_list = expected_results_pdf_list[letter_id]
 
             # List all refnos from both Actual and Expected directories
-            actualRefnos = set(re.findall(refnoPattern, "".join(actualFilesList)))
-            expectedRefnos = set(re.findall(refnoPattern, "".join(expectedFilesList)))
+            actual_refnos = set(re.findall(refno_pattern, "".join(actual_file_list)))
+            expected_refnos = set(re.findall(refno_pattern, "".join(expected_file_list)))
 
-            # Get intersection of refnos....
-            refnoList = actualRefnos & expectedRefnos
+            # Get common refno list by executing set's intersection.
+            common_refno_list = actual_refnos & expected_refnos
 
-            def _get_files(fileListRaw):
-                """Filters out files whose refno does not exist in either Actual or Expected and returns a sorted fileList"""
-                fileList = []
-
-                # Sort fileListRaw before the loop
-                for file in sorted(fileListRaw):
-                    # search for refno from the file path
-                    match = re.search(refnoPattern, file)
-                    if match and match.group() in refnoList:
-                        fileList.append(os.path.join(os.getcwd(), file))
-                    else:
-                        # Append the missing file to the missingFiles list
-                        source = Path(file).parts[-2]
-                        if 'actual' in source.lower():
-                            missingFiles.append(os.path.join(os.getcwd(), 'Expected_Results', file))
-                        else:
-                            missingFiles.append(os.path.join(os.getcwd(), 'Actual_Results', file))
-
-                return fileList
-
-            masterList['Actual'][letterID] = _get_files(actualFilesList)
-            masterList['Expected'][letterID] = _get_files(expectedFilesList)
+            master_list["Actual"][letter_id] = get_filtered_list(refno_pattern, common_refno_list, actual_file_list, missing_files)
+            master_list["Expected"][letter_id] = get_filtered_list(refno_pattern, common_refno_list, expected_file_list, missing_files)
 
         # Info: Missing files
-        if missingFiles:
-            print('Missing Files:')
-            for missingFile in missingFiles:
-                print('  {}'.format(missingFile))
-            else:
-                print()
+        if missing_files:
+            print("Missing Files:")
+            [print("  {}".format(file)) for file in missing_files]
+            print()
 
-    return masterList
+    return master_list
 
 
-def merge_files(fileList):
-    """Merge the files from fileList."""
-
+def merge_files(master_list):
+    """Merge the files based from the master_list."""
     # TODO: Abort program if lists are not aligned/sorted properly... use Path.sort()?
-    # Create a tmp directory
-    try:
-        pid = os.getpid()
-        tmpDir = os.path.join(os.getcwd(), 'tmp{}'.format(pid))
-        if not os.path.exists(tmpDir):
-            os.mkdir(tmpDir)
 
-    except Exception as e:
-        errMsg = 'Unable to create tmp{} directory.'.format(pid)
-        abort_program(errMsg, e)
+    tmp_directory = os.path.join(os.getcwd(), "tmp{}".format(os.getpid()))
 
-    pdfFileMergerActual = PdfFileMerger()
-    pdfFileMergerExpected = PdfFileMerger()
-    blankPDF = os.path.join(os.getcwd(), 'PyPDF2/blankPDF.pdf')
+    pdf_merger_actual = PdfFileMerger()
+    pdf_merger_expected = PdfFileMerger()
+    blank_pdf_file = os.path.join(os.getcwd(), "PyPDF2/blankPDF.pdf")
 
-    letterIDs = fileList['Expected'].keys()
+    letter_ids = master_list["Expected"].keys()
 
-    for letterID in letterIDs:
-        actualLetters = fileList['Actual'][letterID]
-        expectedLetters = fileList['Expected'][letterID]
+    for letter_id in letter_ids:
+        actual_letters = master_list["Actual"][letter_id]
+        expected_letters = master_list["Expected"][letter_id]
 
-        filesMerged = 0
-        for actualLetter, expectedLetter in zip(actualLetters, expectedLetters):
+        # TODO: Add try and except
+        files_merged = 0
+        for actual_letter, expected_letter in zip(actual_letters, expected_letters):
+            # Get the page count of both files.
+            with open(actual_letter, "rb") as fileObj:
+                actual_letter_page_count = PdfFileReader(fileObj).getNumPages()
 
-            # Get the page count of both files
-            with open(actualLetter, 'rb') as fileObj:
-                actualLetterPageCount = PdfFileReader(fileObj).getNumPages()
-
-            with open(expectedLetter, 'rb') as fileObj:
-                expectedLetterPageCount = PdfFileReader(fileObj).getNumPages()
+            with open(expected_letter, "rb") as fileObj:
+                expected_letter_page_count = PdfFileReader(fileObj).getNumPages()
 
             # Check if pageCount does not match
-            if actualLetterPageCount != expectedLetterPageCount:
-                # Add blankpage and save as a tmpfile
-                pdfFileBlankMerger = PdfFileMerger()
-                blankPagesToAdd = abs(actualLetterPageCount - expectedLetterPageCount)
-                tmpFile = expectedLetter.replace('Expected_Results', '{}'.format(Path(tmpDir).parts[-1]))
-                actualGtExpected = False
+            if actual_letter_page_count != expected_letter_page_count:
+                # Add a blank page and save as a tmpfile
+                pdf_merger_blank = PdfFileMerger()
+                num_of_blank_pages_to_add = abs(actual_letter_page_count - expected_letter_page_count)
+                tmp_file = expected_letter.replace("Expected_Results", "{}".format(Path(tmp_directory).parts[-1]))
 
-                if actualLetterPageCount > expectedLetterPageCount:
-                    pdfFileBlankMerger.append(expectedLetter)
-                    pdfFileMergerActual.append(actualLetter)
-                    actualGtExpected = True
-                    print('Adding {} blank page(s) to {}.'.format(blankPagesToAdd, expectedLetter))
-
-                elif actualLetterPageCount < expectedLetterPageCount:
-                    pdfFileBlankMerger.append(actualLetter)
-                    pdfFileMergerExpected.append(expectedLetter)
-                    print('Adding {} blank page(s) to {}.'.format(blankPagesToAdd, actualLetter))
-
-                while blankPagesToAdd > 0:
-                    pdfFileBlankMerger.append(blankPDF)
-                    blankPagesToAdd -= 1
-
-                with open(tmpFile, 'wb') as fileObj:
-                    pdfFileBlankMerger.write(fileObj)
-
-                if actualGtExpected:
-                    pdfFileMergerExpected.append(tmpFile)
+                actual_pg_count_gt_expected = actual_letter_page_count > expected_letter_page_count
+                if actual_pg_count_gt_expected:
+                    pdf_merger_blank.append(expected_letter)
+                    pdf_merger_actual.append(actual_letter)
+                    print("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, expected_letter))
                 else:
-                    pdfFileMergerActual.append(tmpFile)
+                    pdf_merger_blank.append(actual_letter)
+                    pdf_merger_expected.append(expected_letter)
+                    print("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, actual_letter))
 
+                [pdf_merger_blank.append(blank_pdf_file) for _ in range(num_of_blank_pages_to_add)]
+
+                # Save modified pdf files as tmp files.
+                with open(tmp_file, "wb") as fileObj:
+                    pdf_merger_blank.write(fileObj)
+
+                # Add the tmp_file to their respective merge list
+                if actual_pg_count_gt_expected:
+                    pdf_merger_expected.append(tmp_file)
+                else:
+                    pdf_merger_actual.append(tmp_file)
             else:
-                pdfFileMergerActual.append(actualLetter)
-                pdfFileMergerExpected.append(expectedLetter)
+                pdf_merger_actual.append(actual_letter)
+                pdf_merger_expected.append(expected_letter)
 
-            filesMerged += 1
+            files_merged += 1
 
-        outFileActual = os.path.join(os.getcwd(), 'output/merged_Actual_{}.pdf'.format(letterID))
-        outFileExpected = os.path.join(os.getcwd(), 'output/merged_Expected_{}.pdf'.format(letterID))
+        outfile_actual = os.path.join(os.getcwd(), "output/merged_Actual_{}.pdf".format(letter_id))
+        outfile_expected = os.path.join(os.getcwd(), "output/merged_Expected_{}.pdf".format(letter_id))
 
         try:
             # Save the merged pdf files
-            with open(outFileActual, 'wb') as fileObj:
-                pdfFileMergerActual.write(fileObj)
+            with open(outfile_actual, "wb") as fileObj:
+                pdf_merger_actual.write(fileObj)
 
-            with open(outFileExpected, 'wb') as fileObj:
-                pdfFileMergerExpected.write(fileObj)
+            with open(outfile_expected, "wb") as fileObj:
+                pdf_merger_expected.write(fileObj)
 
-            print('Files merged for {}: {}'.format(letterID, filesMerged))
+            print("Files merged for {}: {}".format(letter_id, files_merged))
 
             # Reset the PdfFileMerger objects
-            pdfFileMergerActual = PdfFileMerger()
-            pdfFileMergerExpected = PdfFileMerger()
+            pdf_merger_actual = PdfFileMerger()
+            pdf_merger_expected = PdfFileMerger()
 
         except IsADirectoryError:
             abort_program("Unable to save {} file due to an existing directory with the same name.".format(fileObj.name))
         except PermissionError:
             abort_program("Unable to save {} file due to permission issues.".format(fileObj.name))
 
-    # Clean-up created temporary files.
+    # Clean-up temporary files.
     clean_up()
 
-    # Archive successfully processed files
+    # Archive processed files
     # archive_files(filePaths, letterID)
 
 
 def clean_up():
     """Delete temporary files and directories created in the merging process."""
     try:
-        tmpDirs = glob.glob('tmp*')
+        tmp_directories = glob.glob("tmp*")
 
         # Skip deleting tmpdir of the current process.
-        # tmpDirs.remove('tmp{}'.format(os.getpid()))
+        # tmpDirs.remove("tmp{}".format(os.getpid()))
 
         # Delete tmp directories.
-        [rmtree(os.path.join(os.getcwd(), tmpDir)) for tmpDir in tmpDirs]
+        [rmtree(os.path.join(os.getcwd(), tmpDir)) for tmpDir in tmp_directories]
 
     except NotADirectoryError as e:
         abort_program(e)
@@ -237,7 +224,7 @@ def archive_files(filePaths, letterID):
         zip_file = "./archive/{}_{}_{}.zip".format(directory, letterID, timestamp)
 
         # compress files into a zipfile
-        with ZipFile(zip_file, 'w') as fh:
+        with ZipFile(zip_file, "w") as fh:
             # write each file one by one
             [fh.write(file) for file in filePaths]
 
