@@ -1,4 +1,4 @@
-import os, glob, re, sys, datetime
+import os, glob, re, sys, datetime, logging
 from PyPDF2 import PdfFileMerger, PdfFileReader
 from pathlib import Path
 from shutil import rmtree
@@ -9,7 +9,7 @@ def create_directories():
     """Create required directories if they don't exist"""
     # Create tmp dir for the merging process.
     tmp_directory = os.path.join(os.getcwd(), "tmp{}".format(os.getpid()))
-    directories = ("Actual_Results", "Expected_Results", "output", "archive", tmp_directory)
+    directories = ("Actual_Results", "Expected_Results", "output", tmp_directory)
     dir_paths = [os.path.join(os.getcwd(), directory) for directory in directories]
 
     try:
@@ -21,6 +21,17 @@ def create_directories():
                 os.mkdir(dir_path)
     except FileExistsError as e:
         abort_program(e)
+
+
+def set_log_configs():
+    """Set log configs"""
+    logging.basicConfig(filename="pdf_merger.log", level=logging.INFO, format='%(message)s', filemode='w')
+
+
+def setup():
+    """Create required directories and set log configs"""
+    create_directories()
+    set_log_configs()
 
 
 def get_complete_pdf_list(directory):
@@ -102,9 +113,9 @@ def get_master_list():
 
         # Info: Missing files
         if missing_files:
-            print("Missing Files:")
-            [print("  {}".format(file)) for file in missing_files]
-            print()
+            logging.info("Missing Files:")
+            [logging.info("  {}".format(file)) for file in missing_files]
+            logging.info("")
 
     return master_list
 
@@ -146,11 +157,11 @@ def merge_files(master_list):
                 if actual_pg_count_gt_expected:
                     pdf_merger_blank.append(expected_letter)
                     pdf_merger_actual.append(actual_letter)
-                    print("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, expected_letter))
+                    logging.info("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, expected_letter))
                 else:
                     pdf_merger_blank.append(actual_letter)
                     pdf_merger_expected.append(expected_letter)
-                    print("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, actual_letter))
+                    logging.info("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, actual_letter))
 
                 [pdf_merger_blank.append(blank_pdf_file) for _ in range(num_of_blank_pages_to_add)]
 
@@ -180,7 +191,7 @@ def merge_files(master_list):
             with open(outfile_expected, "wb") as fileObj:
                 pdf_merger_expected.write(fileObj)
 
-            print("Files merged for {}: {}".format(letter_id, files_merged))
+            logging.info("Files merged for {}: {}".format(letter_id, files_merged))
 
             # Reset the PdfFileMerger objects
             pdf_merger_actual = PdfFileMerger()
@@ -238,13 +249,7 @@ def archive_files(filePaths, letterID):
 
 def abort_program(err_msg, exception_msg=None):
     """Display error  and abort the program."""
-    print("Abort: {}".format(err_msg))
+    logging.error("{}".format(err_msg))
     if exception_msg:
-        print("Error: {}".format(exception_msg))
+        logging.error("Exception: {}".format(exception_msg))
     sys.exit(1)
-
-
-def create_logs():
-    """Create log files."""
-    pass
-    # TODO: Finish create_log()

@@ -14,7 +14,7 @@
 from functions import *
 
 print('Running pdf_merger.py...')
-create_directories()
+setup()
 masterList = get_master_list()
 merge_files(masterList)
 print('Done.')
