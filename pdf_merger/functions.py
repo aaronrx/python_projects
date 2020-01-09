@@ -203,8 +203,10 @@ def clean_up():
     try:
         tmp_directories = glob.glob("tmp*")
 
-        # Skip deleting tmpdir of the current process.
-        # tmpDirs.remove("tmp{}".format(os.getpid()))
+        # TODO: Check PermissionError when program is ran on windows
+        # Skip deleting tmp directory of the current process if os is not linux
+        if sys.platform != "linux":
+            tmp_directories.remove("tmp{}".format(os.getpid()))
 
         # Delete tmp directories.
         [rmtree(os.path.join(os.getcwd(), tmpDir)) for tmpDir in tmp_directories]
