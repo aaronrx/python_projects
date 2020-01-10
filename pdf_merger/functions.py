@@ -31,6 +31,7 @@ def set_log_configs():
 def setup():
     """Create required directories and set log configs"""
     create_directories()
+    # TODO: Exception logging is not working. Fix this.
     set_log_configs()
 
 
@@ -128,7 +129,7 @@ def merge_files(master_list):
 
     pdf_merger_actual = PdfFileMerger()
     pdf_merger_expected = PdfFileMerger()
-    blank_pdf_file = os.path.join(os.getcwd(), "PyPDF2/blankPDF.pdf")
+    blank_pdf_file = os.path.join(os.getcwd(), "files/blankPDF.pdf")
 
     letter_ids = master_list["Expected"].keys()
 
@@ -206,7 +207,7 @@ def merge_files(master_list):
     clean_up()
 
     # Archive processed files
-    # archive_files(filePaths, letterID)
+    # archive_files(file_paths, letter_id)
 
 
 def clean_up():
@@ -228,21 +229,21 @@ def clean_up():
         abort_program("Unable to delete tmp directory due to permission issues.", e)
 
 
-def archive_files(filePaths, letterID):
+def archive_files(file_paths, letter_id):
     """Archive input files."""
 
     try:
-        directory = Path(filePaths[0]).parts[0]
+        directory = Path(file_paths[0]).parts[0]
         timestamp = str(datetime.datetime.now().date())
-        zip_file = "./archive/{}_{}_{}.zip".format(directory, letterID, timestamp)
+        zip_file = "./archive/{}_{}_{}.zip".format(directory, letter_id, timestamp)
 
         # compress files into a zipfile
         with ZipFile(zip_file, "w") as fh:
             # write each file one by one
-            [fh.write(file) for file in filePaths]
+            [fh.write(file) for file in file_paths]
 
         # delete the files now that we have saved them.
-        [os.remove(file) for file in filePaths]
+        [os.remove(file) for file in file_paths]
     except IsADirectoryError as e:
         abort_program(e)
 
