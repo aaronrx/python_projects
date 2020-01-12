@@ -30,7 +30,6 @@ def create_directories():
 
 def setup():
     """Create required directories and set log configs"""
-    # TODO: Exception logging is not working. Fix this.
     set_log_configs()
     create_directories()
 
@@ -123,7 +122,7 @@ def get_master_list():
 
 def merge_files(master_list):
     """Merge the files based from the master_list."""
-    # TODO: Abort program if lists are not aligned/sorted properly... use Path.sort()?
+    # TODO: Abort program if lists are not aligned/sorted properly...
 
     tmp_directory = os.path.join(os.getcwd(), "tmp{}".format(os.getpid()))
 
