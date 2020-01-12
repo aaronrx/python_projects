@@ -1,5 +1,4 @@
-#!/usr/bin/python3
-
+#!/usr/bin/env python3
 #######################################################################################
 #
 # Program name  : pdf_merger.py
@@ -10,7 +9,6 @@
 #                 then run pdf_merger.py.
 #
 #######################################################################################
-
 from functions import *
 
 print('Running pdf_merger.py...')

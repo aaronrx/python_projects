@@ -1,8 +1,13 @@
-import os, glob, re, sys, datetime, logging
-from PyPDF2 import PdfFileMerger, PdfFileReader
-from pathlib import Path
+import os, re, sys, logging
+from os.path import split, basename
 from shutil import rmtree
-from zipfile import ZipFile
+from glob import glob
+from packages.PyPDF2 import PdfFileMerger, PdfFileReader
+
+
+def set_log_configs():
+    """Set log configs"""
+    logging.basicConfig(filename="pdf_merger.log", level=logging.INFO, format='%(message)s', filemode='w')
 
 
 def create_directories():
@@ -23,16 +28,11 @@ def create_directories():
         abort_program(e)
 
 
-def set_log_configs():
-    """Set log configs"""
-    logging.basicConfig(filename="pdf_merger.log", level=logging.INFO, format='%(message)s', filemode='w')
-
-
 def setup():
     """Create required directories and set log configs"""
-    create_directories()
     # TODO: Exception logging is not working. Fix this.
     set_log_configs()
+    create_directories()
 
 
 def get_complete_pdf_list(directory):
@@ -41,7 +41,7 @@ def get_complete_pdf_list(directory):
     """
 
     # List all pdf files inside path
-    pdf_files = glob.glob("./{}/*.pdf".format(directory))
+    pdf_files = glob("./{}/*.pdf".format(directory))
 
     # Regex patterns...
     refno_pattern = "[A-Z0-9]{1,2}[0-9]{5}"
@@ -52,7 +52,7 @@ def get_complete_pdf_list(directory):
 
     # TODO: Find a better alternative for glob.
     return {letter_id: [os.path.join(os.getcwd(), path)
-                        for path in glob.glob("{}/*{}*.pdf".format(directory, letter_id))] for letter_id in letter_id_list}
+                        for path in glob("{}/*{}*.pdf".format(directory, letter_id))] for letter_id in letter_id_list}
 
 
 def get_filtered_list(refno_pattern, common_refno_list, raw_file_list, missing_files):
@@ -66,8 +66,8 @@ def get_filtered_list(refno_pattern, common_refno_list, raw_file_list, missing_f
         if match and match.group() in common_refno_list:
             file_list.append(os.path.join(os.getcwd(), file))
         else:
-            # Append the missing file to the missingFiles list
-            source = Path(file).parts[-2]
+            # Append the missing file to the missing_files list
+            source = basename(split(file)[0])
             if "actual" in source.lower():
                 missing_files.append(os.path.join(os.getcwd(), "Expected_Results", file))
             else:
@@ -114,7 +114,7 @@ def get_master_list():
 
         # Info: Missing files
         if missing_files:
-            logging.info("Missing Files:")
+            logging.info("Missing files:")
             [logging.info("  {}".format(file)) for file in missing_files]
             logging.info("")
 
@@ -130,61 +130,59 @@ def merge_files(master_list):
     pdf_merger_actual = PdfFileMerger()
     pdf_merger_expected = PdfFileMerger()
     blank_pdf_file = os.path.join(os.getcwd(), "files/blankPDF.pdf")
-
     letter_ids = master_list["Expected"].keys()
 
-    for letter_id in letter_ids:
-        actual_letters = master_list["Actual"][letter_id]
-        expected_letters = master_list["Expected"][letter_id]
+    try:
+        for letter_id in letter_ids:
+            actual_letters = master_list["Actual"][letter_id]
+            expected_letters = master_list["Expected"][letter_id]
+            logging.info("Processing {} files...".format(letter_id))
 
-        # TODO: Add try and except
-        files_merged = 0
-        for actual_letter, expected_letter in zip(actual_letters, expected_letters):
-            # Get the page count of both files.
-            with open(actual_letter, "rb") as fileObj:
-                actual_letter_page_count = PdfFileReader(fileObj).getNumPages()
+            files_merged_count = 0
+            for actual_letter, expected_letter in zip(actual_letters, expected_letters):
+                # Get the page count of both files.
+                with open(actual_letter, "rb") as fileObj:
+                    actual_letter_page_count = PdfFileReader(fileObj).getNumPages()
 
-            with open(expected_letter, "rb") as fileObj:
-                expected_letter_page_count = PdfFileReader(fileObj).getNumPages()
+                with open(expected_letter, "rb") as fileObj:
+                    expected_letter_page_count = PdfFileReader(fileObj).getNumPages()
 
-            # Check if pageCount does not match
-            if actual_letter_page_count != expected_letter_page_count:
-                # Add a blank page and save as a tmpfile
-                pdf_merger_blank = PdfFileMerger()
-                num_of_blank_pages_to_add = abs(actual_letter_page_count - expected_letter_page_count)
-                tmp_file = expected_letter.replace("Expected_Results", "{}".format(Path(tmp_directory).parts[-1]))
+                # Check if pageCount does not match
+                if actual_letter_page_count != expected_letter_page_count:
+                    # Add a blank page and save as a tmp_file
+                    pdf_merger_blank = PdfFileMerger()
+                    num_of_blank_pages_to_add = abs(actual_letter_page_count - expected_letter_page_count)
+                    tmp_file = expected_letter.replace("Expected_Results", "{}".format(basename(tmp_directory)))
+                    actual_pg_count_gt_expected = actual_letter_page_count > expected_letter_page_count
+                    if actual_pg_count_gt_expected:
+                        pdf_merger_blank.append(expected_letter)
+                        pdf_merger_actual.append(actual_letter)
+                        logging.info("Added {} blank page(s) to {}.".format(num_of_blank_pages_to_add, expected_letter))
+                    else:
+                        pdf_merger_blank.append(actual_letter)
+                        pdf_merger_expected.append(expected_letter)
+                        logging.info("Added {} blank page(s) to {}.".format(num_of_blank_pages_to_add, actual_letter))
 
-                actual_pg_count_gt_expected = actual_letter_page_count > expected_letter_page_count
-                if actual_pg_count_gt_expected:
-                    pdf_merger_blank.append(expected_letter)
+                    [pdf_merger_blank.append(blank_pdf_file) for _ in range(num_of_blank_pages_to_add)]
+
+                    # Save modified pdf files as tmp files.
+                    with open(tmp_file, "wb") as fileObj:
+                        pdf_merger_blank.write(fileObj)
+
+                    # Add the tmp_file to their respective merge list
+                    if actual_pg_count_gt_expected:
+                        pdf_merger_expected.append(tmp_file)
+                    else:
+                        pdf_merger_actual.append(tmp_file)
+                else:
                     pdf_merger_actual.append(actual_letter)
-                    logging.info("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, expected_letter))
-                else:
-                    pdf_merger_blank.append(actual_letter)
                     pdf_merger_expected.append(expected_letter)
-                    logging.info("Adding {} blank page(s) to {}.".format(num_of_blank_pages_to_add, actual_letter))
 
-                [pdf_merger_blank.append(blank_pdf_file) for _ in range(num_of_blank_pages_to_add)]
+                files_merged_count += 1
 
-                # Save modified pdf files as tmp files.
-                with open(tmp_file, "wb") as fileObj:
-                    pdf_merger_blank.write(fileObj)
+            outfile_actual = os.path.join(os.getcwd(), "output/merged_Actual_{}.pdf".format(letter_id))
+            outfile_expected = os.path.join(os.getcwd(), "output/merged_Expected_{}.pdf".format(letter_id))
 
-                # Add the tmp_file to their respective merge list
-                if actual_pg_count_gt_expected:
-                    pdf_merger_expected.append(tmp_file)
-                else:
-                    pdf_merger_actual.append(tmp_file)
-            else:
-                pdf_merger_actual.append(actual_letter)
-                pdf_merger_expected.append(expected_letter)
-
-            files_merged += 1
-
-        outfile_actual = os.path.join(os.getcwd(), "output/merged_Actual_{}.pdf".format(letter_id))
-        outfile_expected = os.path.join(os.getcwd(), "output/merged_Expected_{}.pdf".format(letter_id))
-
-        try:
             # Save the merged pdf files
             with open(outfile_actual, "wb") as fileObj:
                 pdf_merger_actual.write(fileObj)
@@ -192,28 +190,28 @@ def merge_files(master_list):
             with open(outfile_expected, "wb") as fileObj:
                 pdf_merger_expected.write(fileObj)
 
-            logging.info("Files merged for {}: {}".format(letter_id, files_merged))
+            logging.info("")
+            logging.info("Merged files: {}".format(files_merged_count))
+            logging.info("Output:")
+            logging.info("  " + outfile_actual)
+            logging.info("  " + outfile_expected)
 
             # Reset the PdfFileMerger objects
             pdf_merger_actual = PdfFileMerger()
             pdf_merger_expected = PdfFileMerger()
 
-        except IsADirectoryError:
-            abort_program("Unable to save {} file due to an existing directory with the same name.".format(fileObj.name))
-        except PermissionError:
-            abort_program("Unable to save {} file due to permission issues.".format(fileObj.name))
+    except IsADirectoryError:
+        abort_program("Unable to save {} file due to an existing directory with the same name.".format(fileObj.name))
+    except PermissionError:
+        abort_program("Unable to save {} file due to permission issues.".format(fileObj.name))
 
-    # Clean-up temporary files.
     clean_up()
-
-    # Archive processed files
-    # archive_files(file_paths, letter_id)
 
 
 def clean_up():
-    """Delete temporary files and directories created in the merging process."""
+    """Delete temporary files and directories created during the merging process."""
     try:
-        tmp_directories = glob.glob("tmp*")
+        tmp_directories = glob("tmp*")
 
         # TODO: Check PermissionError when program is ran on windows
         # Skip deleting tmp directory of the current process if os is not linux
@@ -229,27 +227,8 @@ def clean_up():
         abort_program("Unable to delete tmp directory due to permission issues.", e)
 
 
-def archive_files(file_paths, letter_id):
-    """Archive input files."""
-
-    try:
-        directory = Path(file_paths[0]).parts[0]
-        timestamp = str(datetime.datetime.now().date())
-        zip_file = "./archive/{}_{}_{}.zip".format(directory, letter_id, timestamp)
-
-        # compress files into a zipfile
-        with ZipFile(zip_file, "w") as fh:
-            # write each file one by one
-            [fh.write(file) for file in file_paths]
-
-        # delete the files now that we have saved them.
-        [os.remove(file) for file in file_paths]
-    except IsADirectoryError as e:
-        abort_program(e)
-
-
 def abort_program(err_msg, exception_msg=None):
-    """Display error  and abort the program."""
+    """Display error and abort the program."""
     logging.error("{}".format(err_msg))
     if exception_msg:
         logging.error("Exception: {}".format(exception_msg))
