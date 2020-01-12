@@ -21,7 +21,7 @@ def create_directories():
         for dir_path in dir_paths:
             if os.path.exists(dir_path) and os.path.isfile(dir_path):
                 # Raise exception if a file exists in the supposed path of the directory.
-                raise FileExistsError("Unable to create required directory. File exists in '{}'.".format(dir_path))
+                raise FileExistsError("Unable to create directory '{}' due to an existing file with the same name.".format(dir_path))
             elif not os.path.exists(dir_path):
                 os.mkdir(dir_path)
     except FileExistsError as e:
