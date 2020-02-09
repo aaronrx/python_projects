@@ -1,0 +1,16 @@
+Project 1 Notes.
+
+1.  With Pygame handling tasks like drawing images to the screen, you can skip much of the
+    tedious, difficult coding and focus on the higher-level logic of game dynamics.
+
+2.  The screen object is called a surface. A surface in Pygame is a part of the screen where
+    you display a game element. Each element in the game, like the aliens or the ship, is a
+    surface. The surface returned by display.set_mode() represents the entire game window.
+    When we activate the game’s animation loop, this surface is automatically redrawn on every
+    pass through the loop.
+
+3.  When you call draw() on a Group, Pygame automatically draws each element in the group
+    at the position defined by its rect attribute. In this case, aliens.draw(screen) draws
+    each alien in the group to the screen.
+
+4.  In game programming, collisions happen when game elements overlap.
