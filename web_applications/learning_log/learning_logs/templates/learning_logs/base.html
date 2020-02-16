@@ -1,0 +1,15 @@
+<p>
+  <!--Creates a paragraph containing the name of the project, which also acts as a link to the home page.
+  The template tag {% url 'learning_logs:index' %} generates a URL matching the URL pattern defined in
+  learning_logs/urls.py with the name 'index'-->
+  <a href="{% url 'learning_logs:index' %}">Learning Log</a> -
+  <a href="{% url 'learning_logs:topics' %}">Topics</a> -
+  {% if user.is_authenticated %}
+    Hello, {{ user.username }}.
+    <a href="{% url 'users:logout_view' %}">Log out</a>
+  {% else %}
+    <a href="{% url 'users:register' %}">Register</a> -
+    <a href="{% url 'users:login' %}">Log in</a>
+  {% endif %}
+</p>
+{% block content %}{% endblock content %}
