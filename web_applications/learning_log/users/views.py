@@ -14,6 +14,7 @@ def logout_view(request):
 
 def register(request):
     """Register a new user."""
+
     if request.method != 'POST':
         # Display blank registration form.
         form = UserCreationForm()
@@ -23,8 +24,9 @@ def register(request):
 
     if form.is_valid():
         new_user = form.save()
+
         # Log the user in and then redirect to home page.
-        authenticated_user = authenticate(username=new_user.username,password=request.POST['password1'])
+        authenticated_user = authenticate(username=new_user.username, password=request.POST['password1'])
 
         # Create a valid session for the new user.
         login(request, authenticated_user)
