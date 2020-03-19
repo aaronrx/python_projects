@@ -1,13 +1,11 @@
 {% extends "blogs/base.html" %}
-{% block content %}
-  <p>Awesome Blogsite</p>
-  <p>Posts:</p>
-  <ul>
-    {% for post in blogposts %}
-      <li>{{ post }} <a href="{% url 'blogs:edit_post' post.id %}">Edit post</a></li>
-    {% empty %}
-      <li>You don't have any posts!</li>
-    {% endfor %}
-  </ul>
-  <a href="{% url 'blogs:new_post' %}">Create new post</a>
-{% endblock content %}
+{% load bootstrap3 %}
+
+{% block header %}
+  <div class='jumbotron'>
+    <h2>Awesome Django Blogsite</h2>
+    <h3>
+      <a href="{% url 'users:register' %}">Register an account</a> to make and post anything you want to share to the world.
+    </h3>
+  </div>
+{% endblock header %}

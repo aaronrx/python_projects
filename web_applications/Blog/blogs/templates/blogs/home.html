@@ -1,0 +1,25 @@
+{% extends "blogs/base.html" %}
+{% load bootstrap3 %}
+
+{% block header %}
+  <h2>Awesome Django Blogsite</h2>
+{% endblock header %}
+
+{% block content %}
+  <h4><a href="{% url 'blogs:new_post' %}">Create a new post</a></h4>
+  {% for post in blogposts %}
+    <div class="panel panel-default">
+      <div class="panel-heading">
+        <h5>
+          {{ post |linebreaks }}
+        </h5>
+      </div>
+      <div class="panel-body">
+        {{ post.date_added |date:'M d, Y H:i' }}
+        <small><a href="{% url 'blogs:edit_post' post.id %}">Edit post</a></small>
+      </div>
+    </div>
+  {% empty %}
+    You don't have any posts!
+  {% endfor %}
+{% endblock content %}
