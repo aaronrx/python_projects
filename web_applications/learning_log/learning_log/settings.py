@@ -23,9 +23,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'r!ow8w(#k0z-po3skfizu#a1_&=e-r()wzu(w_v2#@1c+@df1('
 
-# Allow only Heroku to host the project.
-ALLOWED_HOSTS = ['learning-log-ar.herokuapp.com']
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
@@ -148,8 +145,10 @@ if os.getcwd() == '/app':
     # Honor the 'X-Forwarded-Proto' header for request.is_secure().
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-    # Allow all host headers.
-    ALLOWED_HOSTS = ['*']
+    # Allow only Heroku to host the project.
+    ALLOWED_HOSTS = ['learning-log-ar.herokuapp.com']
+
+    DEBUG = False
 
     # Static asset configuration
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
